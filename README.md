@@ -17,17 +17,31 @@ Replace this paragraph with your own summary of what your version does.
 
 ## How The System Works
 
-Explain your design in plain language.
+Real world recommenders like the ones on Spotify or YouTube learn from huge amounts of behavior. They watch what millions of people play, skip, save, and replay, and they use those patterns to guess what someone will enjoy next. They also mix in the qualities of the songs themselves, such as genre and energy, and they keep updating as tastes change. My version is much smaller and simpler. It does not learn from crowds or history. Instead it focuses on content, meaning it compares the qualities of each song to a taste profile the user describes up front. My version prioritizes matching a user's stated genre and mood, keeping the song's energy close to what the user wants, and honoring whether the user prefers an acoustic sound.
 
-Some prompts to answer:
+- What each `Song` uses
+  Every song stores its identity plus a set of qualities the recommender can compare against:
+  - `id`, `title`, `artist` for identity and display
+  - `genre` (for example pop, lofi, rock, jazz)
+  - `mood` (for example happy, chill, intense, focused)
+  - `energy` (0 to 1, how calm or intense the song feels)
+  - `tempo_bpm` (speed in beats per minute)
+  - `valence` (0 to 1, how positive or upbeat the song sounds)
+  - `danceability` (0 to 1, how easy it is to move to)
+  - `acousticness` (0 to 1, how acoustic versus produced it sounds)
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+- What the `UserProfile` stores
+  The profile holds what the user tells us about their taste:
+  - `favorite_genre` the genre they want to hear
+  - `favorite_mood` the mood they are in
+  - `target_energy` the energy level they are aiming for (0 to 1)
+  - `likes_acoustic` whether they prefer an acoustic sound
 
-You can include a simple diagram or bullet list if helpful.
+- How the `Recommender` computes a score
+  The recommender scores one song at a time. It gives points when the song's genre matches the favorite genre and fewer points when the mood matches, since genre is a stronger taste signal. For energy it rewards closeness rather than size, so a song whose energy sits near the target scores higher than one that is far away in either direction. If the user likes acoustic music, songs with higher acousticness earn extra points. Each quality is weighted so that the strongest signals count for more.
+
+- How songs are chosen
+  After every song has a score, the recommender sorts the whole list from highest score to lowest and returns the top few. Scoring judges one song on its own, and ranking then compares all of those scores to decide the final order.
 
 ---
 
@@ -41,6 +55,8 @@ You can include a simple diagram or bullet list if helpful.
    python -m venv .venv
    source .venv/bin/activate      # Mac or Linux
    .venv\Scripts\activate         # Windows
+
+   ```
 
 2. Install dependencies
 
@@ -79,7 +95,7 @@ Paste a sample of your recommender's output here as a text block so a reader can
 #   3. ...
 ```
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or demo video link here -->
+**Screenshot or video** _(optional)_: <!-- Insert a screenshot or demo video link here -->
 
 ---
 
@@ -117,6 +133,3 @@ Write 1 to 2 paragraphs here about what you learned:
 
 - about how recommenders turn data into predictions
 - about where bias or unfairness could show up in systems like this
-
-
-

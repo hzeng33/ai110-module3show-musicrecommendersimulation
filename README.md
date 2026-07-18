@@ -37,11 +37,48 @@ Real world recommenders like the ones on Spotify or YouTube learn from huge amou
   - `target_energy` the energy level they are aiming for (0 to 1)
   - `likes_acoustic` whether they prefer an acoustic sound
 
-- How the `Recommender` computes a score
-  The recommender scores one song at a time. It gives points when the song's genre matches the favorite genre and fewer points when the mood matches, since genre is a stronger taste signal. For energy it rewards closeness rather than size, so a song whose energy sits near the target scores higher than one that is far away in either direction. If the user likes acoustic music, songs with higher acousticness earn extra points. Each quality is weighted so that the strongest signals count for more.
+### Data Flow
 
-- How songs are chosen
-  After every song has a score, the recommender sorts the whole list from highest score to lowest and returns the top few. Scoring judges one song on its own, and ranking then compares all of those scores to decide the final order.
+The whole program moves in one direction, from what the user tells us to a short list of songs we hand back:
+
+```
+Input (User Prefs)  →  Process (The Loop: judge every song in the CSV)  →  Output (The Ranking: Top K songs)
+```
+
+I like to think of it in three stages:
+
+1. **Input.** We load all the songs from `data/songs.csv` into memory and we read the user's taste profile, which is their favorite genre, their mood, the energy level they are aiming for, and whether they enjoy an acoustic sound.
+2. **Process, the loop.** We walk through the catalog one song at a time and run each song through the scoring recipe below. At this stage the song is judged completely on its own. It knows nothing about the other songs. The output of this stage is a score and a short list of reasons for every song.
+3. **Output, the ranking.** Once every song has a score, we sort the whole catalog from the highest score to the lowest and keep only the top K, for example the top five. This is the one and only place where songs are compared against each other.
+
+Keeping scoring and ranking separate is the core idea. Scoring answers "how well does this one song fit the user," and ranking answers "which of these songs win."
+
+### My Finalized Algorithm Recipe
+
+Every song starts at zero points and earns points for matching the user. Here is the exact recipe I settled on:
+
+| Rule             | Points     | Reasoning                                                          |
+| ---------------- | ---------- | ------------------------------------------------------------------ |
+| Genre match      | +2.0       | Genre is the strongest taste signal, so it carries the most weight |
+| Mood match       | +1.0       | Mood matters but it blurs across genres, so it counts for less     |
+| Energy closeness | up to +1.5 | Reward for sitting near the target energy, not for being loud      |
+| Acoustic bonus   | up to +1.0 | Only added when the user says they like an acoustic sound          |
+
+Explanation for couple of rules:
+
+- Energy closeness - rewards nearness, not size. I take the distance between the song's energy and the user's target energy, subtract that distance from one, and multiply the result by 1.5. A song that sits right on the target earns the full 1.5, and the points fade toward zero as the gap grows. Both energy values live on a scale from 0 to 1.
+- Acoustic bonus - scales with the song's own acousticness value times 1.0, so a very acoustic track earns more than a barely acoustic one, but only when the user asked for that sound.
+
+The most any single song can earn is 2.0 plus 1.0 plus 1.5 plus 1.0, which comes to a ceiling of **5.5 points**. The ordering of the weights, genre above energy above mood and acoustic, is a deliberate claim about taste: genre is close to a deal breaker, energy sets the vibe, and mood and acousticness act as tie breakers.
+
+### Biases I Expect
+
+Because I chose these weights by hand, the system carries some biases I already anticipate:
+
+- **It may over prioritize genre.** With genre worth a full 2.0, a song in the exact right genre can beat a wonderful song that nails the user's mood and energy but happens to sit in a neighboring genre. Great matches can get buried simply for wearing the wrong label.
+- **It treats genres as all or nothing.** The match is exact, so "pop" and "indie pop" earn zero shared credit even though a listener would probably enjoy both. There is no idea of genres being close cousins.
+- **It leans toward the average middle of the catalog.** Since energy rewards closeness to the target, songs with a very high or very low energy rarely score well unless the user aims for an extreme, so unusual or adventurous tracks tend to lose out.
+- **It can echo a single preference too loudly.** A user who states a strong genre will keep seeing that same genre, which narrows discovery and can trap them in a small corner of the catalog.
 
 ---
 
@@ -84,18 +121,36 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Sample Recommendation Output
 
-Paste a sample of your recommender's output here as a text block so a reader can see what it produces:
+Below is a real run of the recommender for the default taste profile
+`genre=pop, mood=happy, energy=0.8, likes_acoustic=False`, produced by
+`python src/main.py`:
 
 ```
-# e.g.:
-# User profile: genre=indie, mood=chill, energy=low
-# Recommendations:
-#   1. ...
-#   2. ...
-#   3. ...
+Top recommendations:
+
+Sunrise City - Score: 4.47
+Because: genre match (+2.0), mood match (+1.0), energy close to target (+1.47)
+
+Gym Hero - Score: 3.30
+Because: genre match (+2.0), energy close to target (+1.3)
+
+Rooftop Lights - Score: 2.44
+Because: mood match (+1.0), energy close to target (+1.44)
+
+Night Drive Loop - Score: 1.42
+Because: energy close to target (+1.42)
+
+Storm Runner - Score: 1.33
+Because: energy close to target (+1.33)
 ```
 
-**Screenshot or video** _(optional)_: <!-- Insert a screenshot or demo video link here -->
+A quick read of this run: Sunrise City wins clearly because it is the only song
+that matches the genre, the mood, and the target energy all at once. The more
+interesting result is that Gym Hero lands above Rooftop Lights. Gym Hero is pop
+but its mood is intense, while Rooftop Lights is genuinely happy with an almost
+perfect energy match. Because a genre match is worth a full 2.0 and a mood match
+is only worth 1.0, the pop label alone outweighs the better mood and energy fit.
+This is the genre priority bias described above showing up in a real result.
 
 ---
 
